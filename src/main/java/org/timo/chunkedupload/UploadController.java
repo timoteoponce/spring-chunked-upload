@@ -40,14 +40,15 @@ public class UploadController {
 
         if (range.begin == 0L) {
             file.delete();
-            
+
         } else if (file.length() >= range.totalSize)
             throw new IllegalStateException("File upload offset: " + range + ", current size: " + file.length());
 
         request.getFileMap().forEach((name, partFile) -> {
 
-            try (FileOutputStream fos = new FileOutputStream(file, true)) {
-                fos.write(IOUtils.toByteArray(partFile.getInputStream()));
+            try (FileOutputStream fos = new FileOutputStream(file, true);
+                InputStream is = partFile.getInputStream()) {
+                fos.write(IOUtils.toByteArray(is));
             } catch (IOException e) {
                 throw new IllegalStateException("Error when processing file content", e);
             }
