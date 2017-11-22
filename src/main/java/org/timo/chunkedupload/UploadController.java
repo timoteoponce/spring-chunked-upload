@@ -21,22 +21,29 @@ import java.util.*;
 @RestController
 public class UploadController {
 
-    private String filePath = System.getProperty("user.home") + "/tmp/";
-
     @RequestMapping("/hello")
     public String sayHi() {
         return "Hi at " + LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
     }
 
+    private String filePath() {
+        if (System.getProperty("downloadDir") == null)
+            return FilenameUtils.normalize(System.getProperty("user.home") + "/tmp/", true);
+        return FilenameUtils.normalize(System.getProperty("downloadDir") + "/",true);
+    }
+
     @ResponseBody
     @RequestMapping(value = "/chunked-upload", method = RequestMethod.POST)
     public Map<String, String> chunkedUpload(final @RequestHeader HttpHeaders headers, final MultipartHttpServletRequest request) {
+        info("Headers: " + headers);
         String fileName = extractFilename(headers.getFirst("Content-Disposition"));
         RangeData range = extractRangeData(headers.getFirst("Content-Range"));
 
-        File file = new File(filePath + fileName);
+        File file = new File(filePath() + fileName);
         if (!file.getParentFile().exists() && !file.getParentFile().mkdirs())
             throw new IllegalStateException("Can't create storage folder: " + file.getAbsolutePath());
+
+        info("File: " + file.getAbsolutePath() + " range: " + range);
 
         if (range.begin == 0L) {
             file.delete();
@@ -47,7 +54,7 @@ public class UploadController {
         request.getFileMap().forEach((name, partFile) -> {
 
             try (FileOutputStream fos = new FileOutputStream(file, true);
-                InputStream is = partFile.getInputStream()) {
+                 InputStream is = partFile.getInputStream()) {
                 fos.write(IOUtils.toByteArray(is));
             } catch (IOException e) {
                 throw new IllegalStateException("Error when processing file content", e);
@@ -57,14 +64,16 @@ public class UploadController {
     }
 
     private static String extractFilename(String str) {
-        String key = "filename";
-        int idx = str.indexOf("filename");
-        if (idx >= 0) {
-            String value = str.substring(idx + (key + "=\"").length(), str.length() - 1).trim();
-            try {
-                return URLDecoder.decode(value, StandardCharsets.UTF_8.name());
-            } catch (UnsupportedEncodingException e) {
-                throw new IllegalStateException("Invalid Content-Disposition header content: " + str, e);
+        if (str != null) {
+            String key = "filename";
+            int idx = str.indexOf("filename");
+            if (idx >= 0) {
+                String value = str.substring(idx + (key + "=\"").length(), str.length() - 1).trim();
+                try {
+                    return URLDecoder.decode(value, StandardCharsets.UTF_8.name());
+                } catch (UnsupportedEncodingException e) {
+                    throw new IllegalStateException("Invalid Content-Disposition header content: " + str, e);
+                }
             }
         }
         throw new IllegalArgumentException("Invalid Content-Disposition header: " + str);
